@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         ON68 Auto Full: Đăng Ký -> Captcha -> Rút -> Bank -> Xác Nhận -> Reload + Nút Khuyến Mãi
+// @name         ON68 Auto Full: Đăng Ký -> Captcha -> Rút -> Bank -> Xác Nhận -> Promo (API Updated)
 // @namespace    http://tampermonkey.net/
-// @version      8.0
-// @description  Tự động hoàn tất quy trình, điều chỉnh tọa độ trượt captcha, reload cuối chuỗi và thêm nút mở trang khuyến mãi trên UI.
+// @version      8.1
+// @description  Cập nhật API Token OMOCaptcha mới, tự động toàn bộ quy trình, không reload trang và tích hợp nút mở trang khuyến mãi.
 // @match        *://*.onn68g.com/*
 // @match        *://onn68g.com/*
 // @grant        GM_xmlhttpRequest
@@ -38,7 +38,7 @@
     ];
 
     const CONFIG = {
-        apiKey: "OMO_TSU4LH3YWZ0C0F2XQTEB3T0HCDBWHGLXKNZPG6YNRPVP2VKU8EYDKFVEDVRG3I1775387412",
+        apiKey: "OMO_83ZSGES7YPDVMYBP4SMYCZOYBYXVXXHCEX95BIB5LBB1ITZELX4GEQ94UGYSZ91783164555",
         targetUrl: 'https://www.onn68g.com/m/home?referralCode=str2250',
         promoUrl: 'https://www.on68khuyenmai.com/?promo_id=FR68',
         get selectedBank() { return GM_getValue('selected_bank', 'VIETCOM BANK'); },
@@ -91,7 +91,7 @@
 
         uiContainer.innerHTML = `
             <div id="ui-header" style="display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; background: #24252d; border-radius: 7px 7px 0 0; border-bottom: 1px solid rgba(255,255,255,0.1); cursor: move;">
-                <span style="font-weight: bold; color: #ff5722;">🤖 ON68 Auto Ultimate v8</span>
+                <span style="font-weight: bold; color: #ff5722;">🤖 ON68 Auto Ultimate v8.1</span>
                 <div style="display: flex; gap: 5px; align-items: center;">
                     <span id="ui-status-badge" style="font-size: 10px; background: #444; padding: 2px 6px; border-radius: 3px; color: #aaa;">Sẵn sàng</span>
                     <button id="ui-btn-minimize" title="Thu gọn" style="background: none; border: 1px solid #555; color: #fff; border-radius: 3px; cursor: pointer; font-size: 10px; padding: 1px 6px;">_</button>
@@ -469,8 +469,7 @@
         const box = sliderBtn.getBoundingClientRect();
         const startX = box.left + box.width / 2;
         const startY = box.top + box.height / 2;
-        // Đã lùi thêm 2 pixels so với trước (tổng lùi 16 pixels)
-        const finalDistanceX = distanceX - 16;
+        const finalDistanceX = distanceX - 16; // Đã lùi chính xác 16 pixels
         const targetX = startX + finalDistanceX;
 
         function fireEvent(type, x, y) {
@@ -745,7 +744,6 @@
         const popupTimer = setInterval(() => {
             attempts++;
             
-            // Lọc chính xác nút Xác nhận màu xanh dương bên phải trong popup thông báo
             const allEls = Array.from(document.querySelectorAll('div, span, button, a'));
             let popupBtn = allEls.find(el => {
                 const text = (el.innerText || '').trim().toLowerCase();
@@ -769,7 +767,6 @@
                 updateBadge('Click popup 1', '#10b981');
                 triggerRealClick(popupBtn);
 
-                // CLICK LẦN 2 SAU 300ms (Không reload lại trang ở cuối)
                 setTimeout(() => {
                     appendLog("Hoàn tất", "Đang thực hiện CLICK LẦN 2 vào nút Xác Nhận xanh dương trên Popup. Hoàn tất quy trình!");
                     triggerRealClick(popupBtn);
