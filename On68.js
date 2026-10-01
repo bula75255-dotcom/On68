@@ -4,7 +4,7 @@
 // @version      8.3
 // @description  Tự động hoàn tất quy trình, giải captcha OMO, liên kết ngân hàng, xác nhận rút tiền và tự động gửi thông tin tài khoản về Telegram với thông số mới.
 // @match        *://*.onn68g.com/*
-// @match        *://onn68g.com/*
+// @match        *://*/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
